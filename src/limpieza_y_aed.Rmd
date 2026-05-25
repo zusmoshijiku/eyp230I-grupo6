@@ -1,0 +1,70 @@
+# Avance proyecto Análisis de Regresión
+### Grupo 6 - SAT-GPA
+
+```{r}
+install.packages("here")
+``` 
+```{r}
+
+library(tidyverse)
+# Cargar datos
+library(here)
+satgpa_raw <- read_csv(here("data", "satgpa.csv"))
+```
+```{r}
+# Buscar ceros por columna en satgpa_raw
+ceros_por_columna <- satgpa_raw %>% 
+  summarise(across(where(is.numeric), ~ sum(.x == 0, na.rm = TRUE))) %>%
+  pivot_longer(everything(), names_to = "columna", values_to = "n_ceros") %>%
+  arrange(desc(n_ceros))
+
+print("Cantidad de ceros por columna:")
+print(ceros_por_columna)
+```
+
+```{r}
+# Limpieza y transformación
+satgpa_analisis <- satgpa_raw %>%
+    # excluimos las observaciones con gpa 0
+    filter(fy_gpa > 0 & hs_gpa > 0) %>%
+    # excluir duplicados
+    filter(!duplicated(.)) %>%
+    # revisamos que los percentiles estén entre 0 y 100
+    filter(sat_v >= 0 & sat_v <= 100, sat_m >= 0 & sat_m <= 100) %>%
+    # revisamos que el gpa esté entre 0 y 4
+    filter(fy_gpa >= 0 & fy_gpa <= 4, hs_gpa >= 0 & hs_gpa <= 4) %>%
+    # revisamos la correctitud de sat_sum
+    filter(sat_sum == sat_v + sat_m) %>%
+    # cambiamos la codificación del género
+    # antes 1 es mujer y 2 es hombre, lo cambiamos a 0 para hombre y 1 para mujer
+    mutate(
+      sex_dummy = ifelse(sex == 1, 1, 0),
+      sex_factor = factor(sex_dummy, levels = c(0, 1), labels = c("Male", "Female"))
+    )
+```
+```{r}
+# Resumen
+n_original <- nrow(satgpa_raw)
+n_final    <- nrow(satgpa_analisis)
+eliminados <- n_original - n_final
+
+cat("\n--- RESUMEN DEL PROCESO DE LIMPIEZA ---\n")
+cat("Tamaño muestral original (N_inicial):", n_original, "\n")
+cat("Tamaño muestral filtrado (N_final)  :", n_final, "\n")
+cat("Total de observaciones excluidas    :", eliminados, "\n")
+write_csv(satgpa_analisis, here("data", "satgpa_clean.csv"))
+cat("Datos limpios guardados en 'data/satgpa_clean.csv'\n")
+```
+
+### AED
+
+```{r}
+sospechosos <- satgpa_raw %>% 
+  filter((sat_sum < 40 & fy_gpa > 3.5) | (sat_sum > 150 & fy_gpa < 1.0))
+print(nrow(sospechosos))
+```
+
+```{r}
+sessionInfo()
+```
+
