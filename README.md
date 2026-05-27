@@ -1,4 +1,4 @@
-# eyp230I-grupo6
+# EYP230I - Proyecto SAT y GPA - Grupo 6
 
 Este es el repositorio del proyecto del grupo 6 para el curso Análisis de Regresión (EYP230I). El trabajo será en torno al dataset `satgpa` obtenido desde la plataforma `openintro`, el cual reúne información de SAT y GPA de 1000 estudiantes de una universidad anónima.
 
