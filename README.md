@@ -14,9 +14,11 @@ Cuenta con 1000 observaciones con 6 variables cada una.
 - `hs_gpa`: GPA enseñanza secundaria.
 - `fy_gpa`: GPA primer año de universidad.
 
-Fuente: Educational Testing Service
+Fuente: OpenIntro / Educational Testing Service
 
-Los datos están almacenados en formato `.csv` en la carpeta `/data`. También están ahí los datos límpios.
+https://www.openintro.org/data/index.php?data=satgpa
+
+Los datos están almacenados en formato `.csv` en la carpeta `/data`. También están ahí los datos limpios.
 
 
 ## Limpieza y AED
