@@ -3,6 +3,13 @@
 Este es el repositorio del proyecto del grupo 6 para el curso Análisis de Regresión (EYP230I). El trabajo será en torno al dataset `satgpa` obtenido desde la plataforma `openintro`, el cual reúne información de SAT y GPA de 1000 estudiantes de una universidad anónima.
 
 
+## Descripción de las carpetas del repositorio
+
+- `data`: Contiene el archivo original del dataset y otro archivo del dataset después de la limpieza (tal y como se indica más adelante).
+- `figures`: Contiene todos los gráficos y figuras obtenidos para poder hacer todo el análisis de los datos, los cuáles están también presentes en el Informe.
+- `src`: Contiene el archivo `.ipynb` con el cuál se realizó el análisis de los datos y, a su vez, el archivo `.Rmd` con el cuál se realizó la limpieza de los datos.
+
+
 ## Descripción del dataset
 
 Cuenta con 1000 observaciones con 6 variables cada una.
