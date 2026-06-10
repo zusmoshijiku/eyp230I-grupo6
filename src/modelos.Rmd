@@ -156,10 +156,8 @@ head(ip_ind)
 ```{r}
 # quinto modelo (Modelo de Interacción)
 # hs_gpa + sat_v + sat_m + sex_factor + interacción (sat_m con sex_factor)
-modelo_inter <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m * sex_factor, data = satgpa_train)
+modelo_inter <- lm(fy_gpa ~ hs_gpa * sex_factor + sat_v + sat_m, data = satgpa_train)
 
-# NOTA: En R, 'sat_m * sex_factor' es equivalente a escribir:
-# 'sat_m + sex_factor + sat_m:sex_factor'
 
 # ajuste
 summary(modelo_inter)
