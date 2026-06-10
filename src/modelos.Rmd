@@ -20,6 +20,10 @@ set.seed(2307)
 train_indices <- sample(1:nrow(satgpa), size = 0.8 * nrow(satgpa))
 satgpa_train <- satgpa[train_indices, ]
 satgpa_test <- satgpa[-train_indices, ]
+
+satgpa_train$sex_factor <- as.factor(satgpa_train$sex_factor)
+satgpa_test$sex_factor  <- factor(satgpa_test$sex_factor,
+                                  levels = levels(satgpa_train$sex_factor))
 ```
 
 ```{r}
@@ -50,6 +54,136 @@ ic_media <- predict(modelo_hs_gpa, newdata = satgpa_test,
 
 # intervalo de predicción para una observación individual
 ip_ind <- predict(modelo_hs_gpa, newdata = satgpa_test,
+                  interval = "prediction", level = 0.95)
+
+head(ic_media)
+head(ip_ind)
+```
+
+```{r}
+# segundo modelo
+# hs_gpa + sat_sum
+modelo_hs_sats <- lm(fy_gpa ~ hs_gpa + sat_sum, data = satgpa_train)
+# ajuste
+summary(modelo_hs_sats)
+confint(modelo_hs_sats, level = 0.95)
+# predicción
+pred_test_hs_sats <- predict(modelo_hs_sats, newdata = satgpa_test)
+# métricas de evaluación
+rmse <- sqrt(mean((satgpa_test$fy_gpa - pred_test_hs_sats)^2))
+mae  <- mean(abs(satgpa_test$fy_gpa - pred_test_hs_sats))
+
+sse <- sum((satgpa_test$fy_gpa - pred_test_hs_sats)^2)
+sst <- sum((satgpa_test$fy_gpa - mean(satgpa_test$fy_gpa))^2)
+r2_pred <- 1 - sse/sst
+
+c(RMSE = rmse, MAE = mae, R2_pred = r2_pred)
+
+# intervalo de confianza de la media condicional E[y|x]
+ic_media <- predict(modelo_hs_sats, newdata = satgpa_test,
+                    interval = "confidence", level = 0.95)
+
+# intervalo de predicción para una observación individual
+ip_ind <- predict(modelo_hs_sats, newdata = satgpa_test,
+                  interval = "prediction", level = 0.95)
+
+head(ic_media)
+head(ip_ind)
+```
+
+```{r}
+# tercer modelo
+# hs_gpa + sat_v + sat_m
+modelo_hs_sats_v_m <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m, data = satgpa_train)
+# ajuste
+summary(modelo_hs_sats_v_m)
+confint(modelo_hs_sats_v_m, level = 0.95)
+# predicción
+pred_test_hs_sats_v_m <- predict(modelo_hs_sats_v_m, newdata = satgpa_test)
+# métricas de evaluación
+rmse <- sqrt(mean((satgpa_test$fy_gpa - pred_test_hs_sats_v_m)^2))
+mae  <- mean(abs(satgpa_test$fy_gpa - pred_test_hs_sats_v_m))
+
+sse <- sum((satgpa_test$fy_gpa - pred_test_hs_sats_v_m)^2)
+sst <- sum((satgpa_test$fy_gpa - mean(satgpa_test$fy_gpa))^2)
+r2_pred <- 1 - sse/sst
+
+c(RMSE = rmse, MAE = mae, R2_pred = r2_pred)
+
+# intervalo de confianza de la media condicional E[y|x]
+ic_media <- predict(modelo_hs_sats_v_m, newdata = satgpa_test,
+                    interval = "confidence", level = 0.95)
+
+# intervalo de predicción para una observación individual
+ip_ind <- predict(modelo_hs_sats_v_m, newdata = satgpa_test,
+                  interval = "prediction", level = 0.95)
+
+head(ic_media)
+head(ip_ind)
+```
+
+```{r}
+# cuarto modelo
+# hs_gpa + sat_v + sat_m + sex_factor
+modelo_full <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m + sex_factor, data = satgpa_train)
+# ajuste
+summary(modelo_full)
+confint(modelo_full, level = 0.95)
+# predicción
+pred_test_full <- predict(modelo_full, newdata = satgpa_test)
+# métricas de evaluación
+rmse <- sqrt(mean((satgpa_test$fy_gpa - pred_test_full)^2))
+mae  <- mean(abs(satgpa_test$fy_gpa - pred_test_full))
+
+sse <- sum((satgpa_test$fy_gpa - pred_test_full)^2)
+sst <- sum((satgpa_test$fy_gpa - mean(satgpa_test$fy_gpa))^2)
+r2_pred <- 1 - sse/sst
+
+c(RMSE = rmse, MAE = mae, R2_pred = r2_pred)
+
+# intervalo de confianza de la media condicional E[y|x]
+ic_media <- predict(modelo_full, newdata = satgpa_test,
+                    interval = "confidence", level = 0.95)
+
+# intervalo de predicción para una observación individual
+ip_ind <- predict(modelo_full, newdata = satgpa_test,
+                  interval = "prediction", level = 0.95)
+
+head(ic_media)
+head(ip_ind)
+```
+
+```{r}
+# quinto modelo (Modelo de Interacción)
+# hs_gpa + sat_v + sat_m + sex_factor + interacción (sat_m con sex_factor)
+modelo_inter <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m * sex_factor, data = satgpa_train)
+
+# NOTA: En R, 'sat_m * sex_factor' es equivalente a escribir:
+# 'sat_m + sex_factor + sat_m:sex_factor'
+
+# ajuste
+summary(modelo_inter)
+confint(modelo_inter, level = 0.95)
+
+# predicción
+pred_test_inter <- predict(modelo_inter, newdata = satgpa_test)
+
+# métricas de evaluación
+rmse <- sqrt(mean((satgpa_test$fy_gpa - pred_test_inter)^2))
+mae  <- mean(abs(satgpa_test$fy_gpa - pred_test_inter))
+
+sse <- sum((satgpa_test$fy_gpa - pred_test_inter)^2)
+sst <- sum((satgpa_test$fy_gpa - mean(satgpa_test$fy_gpa))^2)
+r2_pred <- 1 - sse/sst
+
+c(RMSE = rmse, MAE = mae, R2_pred = r2_pred)
+
+# intervalo de confianza de la media condicional E[y|x]
+ic_media <- predict(modelo_inter, newdata = satgpa_test,
+                    interval = "confidence", level = 0.95)
+
+# intervalo de predicción para una observación individual
+ip_ind <- predict(modelo_inter, newdata = satgpa_test,
                   interval = "prediction", level = 0.95)
 
 head(ic_media)
