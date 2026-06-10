@@ -1,0 +1,7 @@
+.github/
+.DS_Store
+.Rhistory
+.venv/
+
+final.md
+src/analisis.ipynb

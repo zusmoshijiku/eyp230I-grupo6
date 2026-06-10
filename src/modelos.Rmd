@@ -1,0 +1,57 @@
+# Avance proyecto Análisis de Regresión
+### Grupo 6 - SAT-GPA
+
+```{r}
+install.packages("here")
+install.packages("tidyverse")
+install.packages("xtable")
+``` 
+```{r}
+library(tidyverse)
+library(xtable)
+# Cargar datos
+library(here)
+satgpa <- read_csv(here("data", "satgpa_clean.csv"))
+```
+
+```{r}
+# train test split
+set.seed(2307)
+train_indices <- sample(1:nrow(satgpa), size = 0.8 * nrow(satgpa))
+satgpa_train <- satgpa[train_indices, ]
+satgpa_test <- satgpa[-train_indices, ]
+```
+
+```{r}
+# primer modelo
+# solo hs_gpa, con intercepto
+modelo_hs_gpa <- lm(fy_gpa ~ hs_gpa, data = satgpa_train)
+
+# ajuste
+summary(modelo_hs_gpa)
+confint(modelo_hs_gpa, level = 0.95)
+
+# predicción
+pred_test <- predict(modelo_hs_gpa, newdata = satgpa_test)
+
+# métricas de evaluación
+rmse <- sqrt(mean((satgpa_test$fy_gpa - pred_test)^2))
+mae  <- mean(abs(satgpa_test$fy_gpa - pred_test))
+
+sse <- sum((satgpa_test$fy_gpa - pred_test)^2)
+sst <- sum((satgpa_test$fy_gpa - mean(satgpa_test$fy_gpa))^2)
+r2_pred <- 1 - sse/sst
+
+c(RMSE = rmse, MAE = mae, R2_pred = r2_pred)
+
+# intervalo de confianza de la media condicional E[y|x]
+ic_media <- predict(modelo_hs_gpa, newdata = satgpa_test,
+                    interval = "confidence", level = 0.95)
+
+# intervalo de predicción para una observación individual
+ip_ind <- predict(modelo_hs_gpa, newdata = satgpa_test,
+                  interval = "prediction", level = 0.95)
+
+head(ic_media)
+head(ip_ind)
+```

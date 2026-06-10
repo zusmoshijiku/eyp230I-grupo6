@@ -24,6 +24,7 @@ sex,sat_v,sat_m,sat_sum,hs_gpa,fy_gpa,sex_dummy,sex_factor
 1,52,65,117,3.9,3.61,1,Female
 1,49,58,107,3.5,2.54,1,Female
 1,46,40,86,3.5,2.51,1,Female
+2,43,49,92,2,0,0,Male
 1,63,72,135,4,3.72,1,Female
 2,46,45,91,2.3,0.87,0,Male
 1,45,53,98,3.5,2.79,1,Female
@@ -165,6 +166,7 @@ sex,sat_v,sat_m,sat_sum,hs_gpa,fy_gpa,sex_dummy,sex_factor
 2,54,69,123,4,3.31,0,Male
 1,68,69,137,3.5,2.31,1,Female
 1,56,67,123,4,2.61,1,Female
+1,41,49,90,2,0,1,Female
 1,62,71,133,3.7,3.24,1,Female
 2,55,57,112,4,3.48,0,Male
 2,34,37,71,2.8,2.26,0,Male
@@ -326,6 +328,7 @@ sex,sat_v,sat_m,sat_sum,hs_gpa,fy_gpa,sex_dummy,sex_factor
 1,47,53,100,2.8,2.54,1,Female
 2,49,58,107,3.5,1.19,0,Male
 1,45,53,98,2.2,2.08,1,Female
+2,39,42,81,2.75,0,0,Male
 1,43,50,93,3.25,1.69,1,Female
 1,39,50,89,3,2.26,1,Female
 2,54,56,110,3.7,3.13,0,Male

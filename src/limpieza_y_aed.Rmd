@@ -27,8 +27,6 @@ print(ceros_por_columna)
 ```{r}
 # Limpieza y transformación
 satgpa_analisis <- satgpa_raw %>%
-    # excluimos las observaciones con gpa 0
-    filter(fy_gpa > 0 & hs_gpa > 0) %>%
     # excluir duplicados
     filter(!duplicated(.)) %>%
     # revisamos que los percentiles estén entre 0 y 100
@@ -45,6 +43,67 @@ satgpa_analisis <- satgpa_raw %>%
       sex_factor = factor(sex_dummy, levels = c(0, 1), labels = c("Male", "Female"))
     )
 ```
+```{r}
+# modelo base
+modelo_inicial <- lm(fy_gpa ~ hs_gpa + sat_sum + sex_factor, data = satgpa_analisis)
+
+# leverage y cook
+satgpa_analisis$leverage <- hatvalues(modelo_inicial)
+satgpa_analisis$cooks_dist <- cooks.distance(modelo_inicial)
+
+n <- nrow(satgpa_analisis)
+p <- length(coef(modelo_inicial)) # Incluye el intercepto (en este caso p = 4)
+
+# buscar anómalos
+casos_cero <- satgpa_analisis[satgpa_analisis$fy_gpa == 0, c("sex_factor", "hs_gpa", "sat_sum", "fy_gpa", "leverage", "cooks_dist")]
+print("Diagnóstico de los casos con GPA = 0:")
+print(casos_cero)
+
+# buscar influyentes
+umbrales <- list(
+  leverage = 2 * p / n,       # Umbral común de Apalancamiento
+  cooks = 4 / n               # Umbral estricto de Cook (o 1 para el umbral conservador)
+)
+
+influyentes_cook <- satgpa_analisis[satgpa_analisis$cooks_dist > umbrales$cooks, ]
+print(paste("Cantidad de puntos que superan el umbral de Cook (4/n):", nrow(influyentes_cook)))
+
+leverage_alto <- satgpa_analisis[satgpa_analisis$leverage > umbrales$leverage, ]
+print(paste("Cantidad de puntos que superan el umbral de leverage (2p/n):", nrow(leverage_alto)))
+
+cook_lev_alto <- influyentes_cook[influyentes_cook$leverage > umbrales$leverage, ]
+print(paste("Cantidad de puntos que superan ambos umbrales (Cook y leverage):", nrow(cook_lev_alto)))
+```
+
+```{r}
+par(mfrow = c(1, 2))
+# gráfico distancia de Cook
+plot(modelo_inicial, which = 4, main = "Distancia de Cook")
+
+# gráfico residuos vs apalancamiento
+plot(modelo_inicial, which = 5, main = "Residuos vs Leverage")
+```
+
+```{r}
+# ajuste
+mod_completo <- lm(fy_gpa ~ hs_gpa + sat_sum + sex_factor, data = satgpa_analisis)
+mod_sin_ceros <- lm(fy_gpa ~ hs_gpa + sat_sum + sex_factor, data = subset(satgpa_analisis, fy_gpa > 0))
+
+# comparar coefs
+comp_coef <- data.frame(
+  Beta_Completo = coef(mod_completo),
+  Beta_Sin_Ceros = coef(mod_sin_ceros),
+  Cambio_Pct = ((coef(mod_sin_ceros) - coef(mod_completo)) / coef(mod_completo)) * 100
+)
+
+print("Análisis de sensibilidad de los Coeficientes (Beta):")
+print(comp_coef)
+
+# comparar R2
+print(paste("R2 Completo:", summary(mod_completo)$r.squared))
+print(paste("R2 Sin Ceros:", summary(mod_sin_ceros)$r.squared))
+```
+
 ```{r}
 # Resumen
 n_original <- nrow(satgpa_raw)
@@ -79,12 +138,13 @@ cat("Proporción de mujeres:", n_mujeres / n_total, "\n")
 #### Distribución de fy_gpa
 ```{r fig.width=6, fig.height=4}
 # Histograma de fy_gpa (proporciones 0-1)
-satgpa_analisis %>%
-  filter(!is.na(fy_gpa)) %>%
-  ggplot(aes(x = fy_gpa)) +
-  geom_histogram(binwidth = 0.05, fill = "steelblue", color = "white", boundary = 0) +
-  labs(title = "Histograma de fy_gpa", x = "FY GPA (proporción de 4.0)", y = "Frecuencia") +
-  theme_minimal()
+hist(satgpa_analisis$fy_gpa, 
+     breaks = seq(0, 4, by = 0.1),
+     main = "Histograma de fy_gpa",
+     xlab = "fy_gpa",
+     ylab = "Frecuencia",
+     col = "steelblue",
+     border = "white")
 ```
 
 ```{r}
@@ -96,9 +156,6 @@ library(moments)
 # ver simetría
 asimetria_gpa <- skewness(satgpa_analisis$fy_gpa)
 print(asimetria_gpa)
-
-# shapiro-wilk test para normalidad
-shapiro.test(satgpa_analisis$fy_gpa)
 ```
 #### Matriz de correlación
 ```{r fig.width=6, fig.height=5}
@@ -108,101 +165,85 @@ cor_matrix <- satgpa_analisis %>%
   cor(use = "complete.obs")
 print(cor_matrix)
 
-cor_df <- as.data.frame(as.table(cor_matrix))
+op <- par(mar = c(5, 5, 4, 2) + 0.1)
+on.exit(par(op), add = TRUE)
 
-ggplot(cor_df, aes(x = Var1, y = Var2, fill = Freq)) +
-  geom_tile(color = "white") +
-  geom_text(aes(label = sprintf("%.2f", Freq)), size = 3) +
-  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0, limits = c(-1, 1)) +
-  labs(title = "Matriz de correlación", x = "", y = "") +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1))
+cols <- colorRampPalette(c("blue", "white", "red"))(100)
+image(1:ncol(cor_matrix), 1:nrow(cor_matrix), t(cor_matrix[nrow(cor_matrix):1, ]),
+      col = cols, zlim = c(-1, 1), axes = FALSE, xlab = "", ylab = "",
+      main = "Matriz de correlación")
+axis(1, at = 1:ncol(cor_matrix), labels = colnames(cor_matrix), las = 2)
+axis(2, at = 1:nrow(cor_matrix), labels = rev(rownames(cor_matrix)), las = 2)
+
+for (i in 1:nrow(cor_matrix)) {
+  for (j in 1:ncol(cor_matrix)) {
+    text(j, nrow(cor_matrix) - i + 1, labels = sprintf("%.2f", cor_matrix[i, j]))
+  }
+}
+box()
 ```
 #### Gráficos de dispersión
 ```{r fig.width=6, fig.height=4}
 # Scatterplot: sat_v vs fy_gpa
-satgpa_analisis %>%
-  ggplot(aes(x = sat_v, y = fy_gpa)) +
-  geom_point(alpha = 0.35, color = "steelblue") +
-  labs(title = "sat_v vs fy_gpa", x = "sat_v", y = "fy_gpa") +
-  theme_minimal()
+plot(satgpa_analisis$sat_v, satgpa_analisis$fy_gpa,
+     pch = 16, col = rgb(70, 130, 180, 90, maxColorValue = 255),
+     main = "sat_v vs fy_gpa", xlab = "sat_v", ylab = "fy_gpa")
 ```
 
 ```{r fig.width=6, fig.height=4}
 # Scatterplot: sat_m vs fy_gpa
-satgpa_analisis %>%
-  ggplot(aes(x = sat_m, y = fy_gpa)) +
-  geom_point(alpha = 0.35, color = "darkorange") +
-  labs(title = "sat_m vs fy_gpa", x = "sat_m", y = "fy_gpa") +
-  theme_minimal()
+plot(satgpa_analisis$sat_m, satgpa_analisis$fy_gpa,
+     pch = 16, col = rgb(255, 140, 0, 90, maxColorValue = 255),
+     main = "sat_m vs fy_gpa", xlab = "sat_m", ylab = "fy_gpa")
 ```
 
 ```{r fig.width=6, fig.height=4}
 # Scatterplot: sat_sum vs fy_gpa
-satgpa_analisis %>%
-  ggplot(aes(x = sat_sum, y = fy_gpa)) +
-  geom_point(alpha = 0.35, color = "darkgreen") +
-  labs(title = "sat_sum vs fy_gpa", x = "sat_sum", y = "fy_gpa") +
-  theme_minimal()
+plot(satgpa_analisis$sat_sum, satgpa_analisis$fy_gpa,
+     pch = 16, col = rgb(0, 100, 0, 90, maxColorValue = 255),
+     main = "sat_sum vs fy_gpa", xlab = "sat_sum", ylab = "fy_gpa")
 ```
 
 ```{r fig.width=6, fig.height=4}
 # Scatterplot: hs_gpa vs fy_gpa
-satgpa_analisis %>%
-  ggplot(aes(x = hs_gpa, y = fy_gpa)) +
-  geom_point(alpha = 0.35, color = "purple4") +
-  labs(title = "hs_gpa vs fy_gpa", x = "hs_gpa", y = "fy_gpa") +
-  theme_minimal()
+plot(satgpa_analisis$hs_gpa, satgpa_analisis$fy_gpa,
+     pch = 16, col = rgb(102, 51, 153, 90, maxColorValue = 255),
+     main = "hs_gpa vs fy_gpa", xlab = "hs_gpa", ylab = "fy_gpa")
 ```
 #### Rendimiento según género
 ```{r fig.width=6, fig.height=4}
 # Boxplot: fy_gpa según sex_factor
-satgpa_analisis %>%
-  ggplot(aes(x = sex_factor, y = fy_gpa, fill = sex_factor)) +
-  geom_boxplot(alpha = 0.7) +
-  labs(title = "fy_gpa según sex_factor", x = "sex_factor", y = "fy_gpa") +
-  theme_minimal() +
-  theme(legend.position = "none")
+boxplot(fy_gpa ~ sex_factor, data = satgpa_analisis,
+        main = "fy_gpa según sex_factor", xlab = "sex_factor", ylab = "fy_gpa",
+        col = c("#1f77b4", "#ff7f0e"))
 ```
 
 ```{r fig.width=6, fig.height=4}
 # Boxplot: hs_gpa según sex_factor
-satgpa_analisis %>%
-  ggplot(aes(x = sex_factor, y = hs_gpa, fill = sex_factor)) +
-  geom_boxplot(alpha = 0.7) +
-  labs(title = "hs_gpa según sex_factor", x = "sex_factor", y = "hs_gpa") +
-  theme_minimal() +
-  theme(legend.position = "none")
+boxplot(hs_gpa ~ sex_factor, data = satgpa_analisis,
+        main = "hs_gpa según sex_factor", xlab = "sex_factor", ylab = "hs_gpa",
+        col = c("#1f77b4", "#ff7f0e"))
 ```
 
 ```{r fig.width=6, fig.height=4}
 # Boxplot: sat_v según sex_factor
-satgpa_analisis %>%
-  ggplot(aes(x = sex_factor, y = sat_v, fill = sex_factor)) +
-  geom_boxplot(alpha = 0.7) +
-  labs(title = "sat_v según sex_factor", x = "sex_factor", y = "sat_v") +
-  theme_minimal() +
-  theme(legend.position = "none")
+boxplot(sat_v ~ sex_factor, data = satgpa_analisis,
+        main = "sat_v según sex_factor", xlab = "sex_factor", ylab = "sat_v",
+        col = c("#1f77b4", "#ff7f0e"))
 ```
 
 ```{r fig.width=6, fig.height=4}
 # Boxplot: sat_m según sex_factor
-satgpa_analisis %>%
-  ggplot(aes(x = sex_factor, y = sat_m, fill = sex_factor)) +
-  geom_boxplot(alpha = 0.7) +
-  labs(title = "sat_m según sex_factor", x = "sex_factor", y = "sat_m") +
-  theme_minimal() +
-  theme(legend.position = "none")
+boxplot(sat_m ~ sex_factor, data = satgpa_analisis,
+        main = "sat_m según sex_factor", xlab = "sex_factor", ylab = "sat_m",
+        col = c("#1f77b4", "#ff7f0e"))
 ```
 
 ```{r fig.width=6, fig.height=4}
 # Boxplot: sat_sum según sex_factor
-satgpa_analisis %>%
-  ggplot(aes(x = sex_factor, y = sat_sum, fill = sex_factor)) +
-  geom_boxplot(alpha = 0.7) +
-  labs(title = "sat_sum según sex_factor", x = "sex_factor", y = "sat_sum") +
-  theme_minimal() +
-  theme(legend.position = "none")
+boxplot(sat_sum ~ sex_factor, data = satgpa_analisis,
+        main = "sat_sum según sex_factor", xlab = "sex_factor", ylab = "sat_sum",
+        col = c("#1f77b4", "#ff7f0e"))
 ```
 
 ```{r}
