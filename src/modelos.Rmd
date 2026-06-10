@@ -1,4 +1,4 @@
-# Avance proyecto Análisis de Regresión
+# Proyecto Análisis de Regresión
 ### Grupo 6 - SAT-GPA
 
 ```{r}
