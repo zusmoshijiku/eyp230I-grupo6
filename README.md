@@ -1,6 +1,13 @@
-# eyp230I-grupo6
+# EYP230I - Proyecto SAT y GPA - Grupo 6
 
 Este es el repositorio del proyecto del grupo 6 para el curso Análisis de Regresión (EYP230I). El trabajo será en torno al dataset `satgpa` obtenido desde la plataforma `openintro`, el cual reúne información de SAT y GPA de 1000 estudiantes de una universidad anónima.
+
+
+## Descripción de las carpetas del repositorio
+
+- `data`: Contiene el archivo original del dataset y otro archivo del dataset después de la limpieza (tal y como se indica más adelante).
+- `figures`: Contiene todos los gráficos y figuras obtenidos para poder hacer todo el análisis de los datos, los cuáles están también presentes en el Informe (se detalla más adelante).
+- `src`: Contiene el archivo `.ipynb` el cuál se realizó de forma preliminar y, a su vez, el archivo `.Rmd` con el cuál se realizó la limpieza de los datos (se explica más adelante a detalle).
 
 
 ## Descripción del dataset
@@ -25,7 +32,7 @@ Los datos están almacenados en formato `.csv` en la carpeta `/data`. También e
 
 Solo fue necesario escribir código para esta sección del informe de avance.
 
-Usé VSCode para ejecutar el archivo `.rmd`. Las celdas están en el mismo orden del informe. En la carpeta `/figures` están todas las imágenes generadas para el informe.
+Se usó VSCode para ejecutar el archivo `.rmd`. Las celdas están en el mismo orden del informe. En la carpeta `/figures` están todas las imágenes generadas para el informe.
 
 Hay un archivo `.ipynb` el cual fue creado de forma preliminar y no fue utilizado directamente para la elaboración del informe de avance.
 
