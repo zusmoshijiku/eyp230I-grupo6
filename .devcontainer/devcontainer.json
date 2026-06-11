@@ -1,0 +1,17 @@
+{
+    "name": "Entorno Estadistico R",
+    "build": {
+        "dockerfile": "../Dockerfile",
+        "context": ".."
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "REditorSupport.r",
+                "james-yu.latex-workshop",
+                "Ikuyadeu.r"
+            ]
+        }
+    },
+    "remoteUser": "rstudio"
+}

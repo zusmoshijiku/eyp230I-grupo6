@@ -17,9 +17,15 @@ satgpa <- read_csv(here("data", "satgpa_clean.csv"))
 ```{r}
 # train test split
 set.seed(2307)
-train_indices <- sample(1:nrow(satgpa), size = 0.8 * nrow(satgpa))
-satgpa_train <- satgpa[train_indices, ]
-satgpa_test <- satgpa[-train_indices, ]
+satgpa$.row <- seq_len(nrow(satgpa))
+train_rows <- satgpa %>%
+    group_by(sex_factor) %>%
+    sample_frac(0.8) %>%
+    ungroup() %>%
+    pull(.row)
+
+satgpa_train <- satgpa[train_rows, ] %>% select(-.row)
+satgpa_test  <- satgpa[-train_rows, ] %>% select(-.row)
 
 satgpa_train$sex_factor <- as.factor(satgpa_train$sex_factor)
 satgpa_test$sex_factor  <- factor(satgpa_test$sex_factor,
@@ -186,4 +192,98 @@ ip_ind <- predict(modelo_inter, newdata = satgpa_test,
 
 head(ic_media)
 head(ip_ind)
+```
+
+```{r}
+# 1. Asegúrate de tener cargadas estas librerías para los tests de más adelante
+install.packages("lmtest")
+install.packages("car")
+library(lmtest)
+library(car)
+
+# 2. Ajustar los 5 modelos teóricos en el conjunto de ENTRAMIENTO
+m1 <- lm(fy_gpa ~ hs_gpa, data = satgpa_train)
+m2 <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m, data = satgpa_train)
+m3 <- lm(fy_gpa ~ hs_gpa + sat_sum, data = satgpa_train)
+m4 <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m + sex_factor, data = satgpa_train)
+m5 <- lm(fy_gpa ~ sat_v + sat_m + hs_gpa * sex_factor, data = satgpa_train) 
+# Nota: hs_gpa * sex_factor incluye hs_gpa, sex_factor y la interacción automáticamente.
+
+# 3. Función mágica para calcular métricas In-Sample y Out-of-Sample de una sola vez
+calcular_metricas_globales <- function(modelo, datos_test) {
+  # Métricas In-Sample (Entrenamiento)
+  s <- summary(modelo)
+  r2 <- s$r.squared
+  r2_adj <- s$adj.r.squared
+  rse <- s$sigma
+  
+  # Métricas Out-of-Sample (Prueba)
+  pred <- predict(modelo, newdata = datos_test)
+  rmse <- sqrt(mean((datos_test$fy_gpa - pred)^2))
+  mae  <- mean(abs(datos_test$fy_gpa - pred))
+  sse  <- sum((datos_test$fy_gpa - pred)^2)
+  sst  <- sum((datos_test$fy_gpa - mean(datos_test$fy_gpa))^2)
+  r2_pred <- 1 - (sse / sst)
+  
+  return(c(RSE_in = rse, R2_in = r2, R2Adj_in = r2_adj, 
+           RMSE_test = rmse, MAE_test = mae, R2_pred = r2_pred))
+}
+
+# 4. Crear la tabla comparativa final
+tabla_resultados <- rbind(
+  Modelo_1 = calcular_metricas_globales(m1, satgpa_test),
+  Modelo_2 = calcular_metricas_globales(m2, satgpa_test),
+  Modelo_3 = calcular_metricas_globales(m3, satgpa_test),
+  Modelo_4 = calcular_metricas_globales(m4, satgpa_test),
+  Modelo_5 = calcular_metricas_globales(m5, satgpa_test)
+)
+
+# Mira los números en tu consola
+print(round(tabla_resultados, 5))
+```
+
+```{r}
+# ¿Aportan algo las pruebas SAT desglosadas por sobre las notas de la escuela?
+anova(m1, m2) 
+
+# ¿Aporta el género y la interacción por sobre el modelo de puras variables académicas?
+anova(m2, m5)
+
+# ¿Es realmente necesaria la interacción de género (M5) o nos quedamos con el aditivo (M4)?
+anova(m4, m5)
+```
+
+```{r}
+# Reemplaza 'm5' por tu modelo ganador si fue otro
+modelo_optimo <- m5 
+
+# 1. TEST DE HOMOCEDASTICIDAD (Breusch-Pagan)
+# H0: Los errores son homocedásticos (varianza constante)
+bptest(modelo_optimo)
+
+# 2. TEST DE NORMALIDAD (Shapiro-Wilk)
+# H0: Los errores se distribuyen de forma normal
+residuos_estandarizados <- rstandard(modelo_optimo)
+shapiro.test(residuos_estandarizados)
+
+## no hay evidencia para decir que distribuyen normal, hay que cambiar a ruido blanco
+
+# 3. MULTICOLINEALIDAD (Factores de Inflación de la Varianza)
+# Si algún VIF es > 5, hay problemas severos de colinealidad
+vif(modelo_optimo)
+```
+
+```{r}
+# 1. Calcular las Distancias de Cook para cada observación
+cooks_dist <- cooks.distance(modelo_optimo)
+
+# 2. Ver si hay observaciones que superan el umbral crítico clásico (4 / n)
+umbral_cook <- 4 / nrow(satgpa_train)
+influyentes_cook <- which(cooks_dist > umbral_cook)
+
+print(paste("Cantidad de observaciones influyentes por Cook:", length(influyentes_cook)))
+
+# 3. ¿Están los estudiantes con fy_gpa == 0 dentro de los influyentes?
+estudiantes_cero <- which(satgpa_train$fy_gpa == 0)
+intersect(influyentes_cook, estudiantes_cero)
 ```
