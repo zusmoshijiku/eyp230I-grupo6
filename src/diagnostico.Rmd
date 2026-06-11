@@ -9,6 +9,7 @@ install.packages(c("lmtest", "car"))
 ```  -->
 
 ```{r setup, message=FALSE, warning=FALSE}
+set.seed(2307)
 library(lmtest)
 library(car)
 library(tidyverse)
@@ -31,8 +32,9 @@ satgpa_test$sex_factor  <- factor(satgpa_test$sex_factor,
 # modelo_hs_gpa      <- lm(fy_gpa ~ hs_gpa,                             data = satgpa_train)
 # modelo_hs_sats     <- lm(fy_gpa ~ hs_gpa + sat_sum,                   data = satgpa_train)
 # modelo_hs_sats_v_m <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m,             data = satgpa_train)
-modelo_full        <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m + sex_factor, data = satgpa_train)
-modelo_inter       <- lm(fy_gpa ~ hs_gpa * sex_factor + sat_v + sat_m, data = satgpa_train)
+satgpa_train_clean <- readRDS("satgpa_limpio.rds")
+modelo_full        <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m + sex_factor, data = satgpa_train_clean)
+modelo_inter       <- lm(fy_gpa ~ hs_gpa * sex_factor + sat_v + sat_m, data = satgpa_train_clean)
 
 modelos_lista <- list(
   # M1_hs_gpa      = modelo_hs_gpa,
@@ -82,6 +84,9 @@ map_dfr(modelos_lista, function(m) {
   theme_minimal()
 ```
 
+Observamos que ambos modelos presentan asimetrías en las colas, lo que sugiere que los residuos no siguen una distribución normal perfecta.
+Para ello, realizaremos el test de Shapiro-Wilk para evaluar formalmente la normalidad de los residuos.
+
 ## Test de Shapiro-Wilk — normalidad
 
 H₀: los residuos provienen de una distribución normal.
@@ -94,26 +99,56 @@ map_dfr(modelos_lista, function(m) {
 }, .id = "modelo")
 ```
 
+
+En base a los resultados obtenidos, se rechaza H₀ para ambos modelos, lo que indica que los residuos no siguen una distribución normal.
+Confirmando lo observado en los Q-Q plots.
+Ahora procederemos a realizar la transformación de Box-Cox para intentar normalizar los residuos y mejorar el ajuste de los modelos.
+
+
+```{r boxCox}
+library(MASS)
+bc <- boxcox(fy_gpa ~ hs_gpa * sex_factor + sat_v + sat_m, data = satgpa_train_clean)
+
+lambda_optimo <- bc$x[which.max(bc$y)]
+print(lambda_optimo)
+
+```
+Obtenemos un valor de lambda cercano a 1.23, lo que sugiere que una transformación de potencia podría mejorar la normalidad de los residuos.
+Procederemos a ajustar los modelos utilizando esta transformación de Box-Cox y luego realizaremos nuevamente los diagnósticos para evaluar si se ha logrado una mejora en la normalidad de los residuos.
+
+```{r boxCoxTransform}
+
+satgpa_train_clean$fy_gpa_trans <- (satgpa_train_clean$fy_gpa^lambda_optimo - 1) / lambda_optimo
+
+modelo_boxcox <- lm(fy_gpa_trans ~ hs_gpa * sex_factor + sat_v + sat_m, data = satgpa_train_clean)
+
+plot(modelo_boxcox, which = 2)
+```
+```{r boxCoxVerify}
+# sw_boxcox <- shapiro.test(residuals(modelo_boxcox))
+summary(modelo_boxcox)
+```
+
 ## Test de Breusch-Pagan — homocedasticidad
 
 H₀: la varianza del error es constante (homocedasticidad).
 Un p-valor < 0.05 evidencia heterocedasticidad.
 
-```{r breusch_pagan}
+<!-- ```{r breusch_pagan}
 map_dfr(modelos_lista, function(m) {
   bp <- bptest(m)
   data.frame(BP = round(bp$statistic, 4), p_valor = round(bp$p.value, 4))
 }, .id = "modelo")
-```
+``` -->
 
 ## Factor de Inflación de la Varianza (VIF) — multicolinealidad
 
 VIF > 10 indica colinealidad grave; VIF > 5 es señal de advertencia.
 M1 tiene un solo predictor, por lo que no aplica.
 
-```{r vif}
+<!-- ```{r vif}
 map(modelos_lista[-1], vif)
-```
+``` -->
 
 ## Leverage y Distancia de Cook — observaciones influyentes
 
@@ -123,7 +158,7 @@ Umbrales utilizados:
 - Leverage: $h_{ii} > 2(p+1)/n$
 - Cook: $D_i > 4/n$
 
-```{r influyentes}
+<!-- ```{r influyentes}
 diag_df <- function(modelo, nombre) {
   n   <- nrow(modelo$model)
   p   <- length(coef(modelo)) - 1
@@ -154,9 +189,9 @@ infl |>
   group_by(modelo) |>
   summarise(n_alto_leverage = sum(alto_lev),
             n_alto_cooks    = sum(alto_Di))
-```
+``` -->
 
-```{r plot_leverage}
+<!-- ```{r plot_leverage}
 umbrales_h <- infl |> distinct(modelo, thr_h)
 
 infl |>
@@ -171,9 +206,9 @@ infl |>
        x = "Observación", y = expression(h[ii]),
        color = "Alto leverage") +
   theme_minimal()
-```
+``` -->
 
-```{r plot_cooks}
+<!-- ```{r plot_cooks}
 umbrales_D <- infl |> distinct(modelo, thr_D)
 
 infl |>
@@ -188,4 +223,4 @@ infl |>
        x = "Observación", y = expression(D[i]),
        color = "Influyente") +
   theme_minimal()
-```
+``` -->

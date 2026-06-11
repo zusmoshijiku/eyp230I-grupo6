@@ -1,11 +1,11 @@
 # Avance proyecto Análisis de Regresión
 ### Grupo 6 - SAT-GPA
 
-```{r}
+<!-- ```{r}
 install.packages("here")
 install.packages("tidyverse")
 install.packages("xtable")
-``` 
+```  -->
 ```{r}
 library(tidyverse)
 library(xtable)
@@ -147,9 +147,9 @@ hist(satgpa_analisis$fy_gpa,
      border = "white")
 ```
 
-```{r}
+<!-- ```{r}
 install.packages("moments")
-```
+``` -->
 ```{r}
 library(moments)
 
@@ -253,6 +253,13 @@ by(satgpa_analisis$hs_gpa, satgpa_analisis$sex_factor, summary)
 by(satgpa_analisis$sat_v, satgpa_analisis$sex_factor, summary)
 by(satgpa_analisis$sat_m, satgpa_analisis$sex_factor, summary)
 by(satgpa_analisis$sat_sum, satgpa_analisis$sex_factor, summary)
+```
+
+Se procede a guardar el dataset limpio para su uso en los siguientes análisis y modelado.
+```{r}
+satgpa_limpio <- subset(satgpa_analisis, fy_gpa > 0)
+
+saveRDS(satgpa_limpio, file = "satgpa_limpio.rds")
 ```
 
 ```{r}

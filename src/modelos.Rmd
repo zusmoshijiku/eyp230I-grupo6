@@ -1,11 +1,11 @@
 # Proyecto Análisis de Regresión
 ### Grupo 6 - SAT-GPA
 
-```{r}
+<!-- ```{r}
 install.packages("here")
 install.packages("tidyverse")
 install.packages("xtable")
-``` 
+```  -->
 ```{r}
 library(tidyverse)
 library(xtable)
