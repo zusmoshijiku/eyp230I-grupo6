@@ -1,0 +1,191 @@
+# Diagnóstico de Modelos de Regresión
+### Grupo 6 - SAT-GPA
+
+
+
+
+<!-- ```{r}
+install.packages(c("lmtest", "car"))
+```  -->
+
+```{r setup, message=FALSE, warning=FALSE}
+library(lmtest)
+library(car)
+library(tidyverse)
+library(here)
+library(lmtest)   # bptest
+library(car)      # vif
+
+satgpa <- read_csv(here("data", "satgpa_clean.csv"))
+
+set.seed(2307)
+train_indices        <- sample(1:nrow(satgpa), size = 0.8 * nrow(satgpa))
+satgpa_train         <- satgpa[train_indices, ]
+satgpa_test          <- satgpa[-train_indices, ]
+satgpa_train$sex_factor <- as.factor(satgpa_train$sex_factor)
+satgpa_test$sex_factor  <- factor(satgpa_test$sex_factor,
+                                  levels = levels(satgpa_train$sex_factor))
+```
+
+```{r modelos}
+# modelo_hs_gpa      <- lm(fy_gpa ~ hs_gpa,                             data = satgpa_train)
+# modelo_hs_sats     <- lm(fy_gpa ~ hs_gpa + sat_sum,                   data = satgpa_train)
+# modelo_hs_sats_v_m <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m,             data = satgpa_train)
+modelo_full        <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m + sex_factor, data = satgpa_train)
+modelo_inter       <- lm(fy_gpa ~ hs_gpa * sex_factor + sat_v + sat_m, data = satgpa_train)
+
+modelos_lista <- list(
+  # M1_hs_gpa      = modelo_hs_gpa,
+  # M2_hs_sats     = modelo_hs_sats,
+  # M3_hs_sats_v_m = modelo_hs_sats_v_m,
+  M4_full        = modelo_full,
+  M5_inter       = modelo_inter
+)
+```
+
+## Residuos vs Valores Ajustados
+
+Permite verificar **linealidad** (los residuos deben fluctuar aleatoriamente en torno a cero)
+y dar una primera señal de **homocedasticidad** (la dispersión debe ser constante a lo largo del eje x).
+
+```{r resid_fitted}
+map_dfr(modelos_lista, function(m) {
+  data.frame(ajustado = fitted(m), residuo = residuals(m))
+}, .id = "modelo") |>
+  mutate(modelo = factor(modelo, levels = names(modelos_lista))) |>
+  ggplot(aes(x = ajustado, y = residuo)) +
+  geom_point(alpha = 0.35, size = 1) +
+  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
+  geom_smooth(method = "loess", se = FALSE, color = "steelblue", linewidth = 0.7) +
+  facet_wrap(~modelo, scales = "free_x") +
+  labs(title = "Residuos vs Valores Ajustados",
+       x = "Valores ajustados", y = "Residuos") +
+  theme_minimal()
+```
+
+## Q-Q Plot — normalidad de errores
+
+Si los puntos siguen la línea diagonal, los residuos provienen de una distribución normal.
+Desviaciones en las colas indican colas pesadas o asimetría.
+
+```{r qq}
+map_dfr(modelos_lista, function(m) {
+  data.frame(residuo = residuals(m))
+}, .id = "modelo") |>
+  mutate(modelo = factor(modelo, levels = names(modelos_lista))) |>
+  ggplot(aes(sample = residuo)) +
+  stat_qq(alpha = 0.35, size = 1) +
+  stat_qq_line(color = "red", linetype = "dashed") +
+  facet_wrap(~modelo) +
+  labs(title = "Q-Q Plot de residuos",
+       x = "Cuantiles teóricos", y = "Cuantiles muestrales") +
+  theme_minimal()
+```
+
+## Test de Shapiro-Wilk — normalidad
+
+H₀: los residuos provienen de una distribución normal.
+Un p-valor < 0.05 rechaza H₀.
+
+```{r shapiro}
+map_dfr(modelos_lista, function(m) {
+  sw <- shapiro.test(residuals(m))
+  data.frame(W = round(sw$statistic, 4), p_valor = round(sw$p.value, 4))
+}, .id = "modelo")
+```
+
+## Test de Breusch-Pagan — homocedasticidad
+
+H₀: la varianza del error es constante (homocedasticidad).
+Un p-valor < 0.05 evidencia heterocedasticidad.
+
+```{r breusch_pagan}
+map_dfr(modelos_lista, function(m) {
+  bp <- bptest(m)
+  data.frame(BP = round(bp$statistic, 4), p_valor = round(bp$p.value, 4))
+}, .id = "modelo")
+```
+
+## Factor de Inflación de la Varianza (VIF) — multicolinealidad
+
+VIF > 10 indica colinealidad grave; VIF > 5 es señal de advertencia.
+M1 tiene un solo predictor, por lo que no aplica.
+
+```{r vif}
+map(modelos_lista[-1], vif)
+```
+
+## Leverage y Distancia de Cook — observaciones influyentes
+
+Se aplica sobre M4 y M5 (modelos candidatos finales).
+
+Umbrales utilizados:
+- Leverage: $h_{ii} > 2(p+1)/n$
+- Cook: $D_i > 4/n$
+
+```{r influyentes}
+diag_df <- function(modelo, nombre) {
+  n   <- nrow(modelo$model)
+  p   <- length(coef(modelo)) - 1
+  thr_h <- 2 * (p + 1) / n
+  thr_D <- 4 / n
+
+  data.frame(
+    obs      = seq_len(n),
+    leverage = hatvalues(modelo),
+    cooks_d  = cooks.distance(modelo),
+    modelo   = nombre,
+    thr_h    = thr_h,
+    thr_D    = thr_D
+  )
+}
+
+infl <- bind_rows(
+  diag_df(modelo_full,  "M4_full"),
+  diag_df(modelo_inter, "M5_inter")
+) |>
+  mutate(
+    alto_lev = leverage > thr_h,
+    alto_Di  = cooks_d  > thr_D
+  )
+
+# Resumen de observaciones que superan el umbral
+infl |>
+  group_by(modelo) |>
+  summarise(n_alto_leverage = sum(alto_lev),
+            n_alto_cooks    = sum(alto_Di))
+```
+
+```{r plot_leverage}
+umbrales_h <- infl |> distinct(modelo, thr_h)
+
+infl |>
+  ggplot(aes(x = obs, y = leverage, color = alto_lev)) +
+  geom_point(size = 1.5, alpha = 0.7) +
+  geom_hline(data = umbrales_h,
+             aes(yintercept = thr_h),
+             linetype = "dashed", color = "red") +
+  facet_wrap(~modelo) +
+  scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "tomato")) +
+  labs(title = "Leverage por observación",
+       x = "Observación", y = expression(h[ii]),
+       color = "Alto leverage") +
+  theme_minimal()
+```
+
+```{r plot_cooks}
+umbrales_D <- infl |> distinct(modelo, thr_D)
+
+infl |>
+  ggplot(aes(x = obs, y = cooks_d, color = alto_Di)) +
+  geom_point(size = 1.5, alpha = 0.7) +
+  geom_hline(data = umbrales_D,
+             aes(yintercept = thr_D),
+             linetype = "dashed", color = "red") +
+  facet_wrap(~modelo) +
+  scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "tomato")) +
+  labs(title = "Distancia de Cook por observación",
+       x = "Observación", y = expression(D[i]),
+       color = "Influyente") +
+  theme_minimal()
+```
