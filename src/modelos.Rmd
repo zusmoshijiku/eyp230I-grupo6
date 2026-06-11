@@ -1,11 +1,11 @@
 # Proyecto Análisis de Regresión
 ### Grupo 6 - SAT-GPA
 
-```{r}
+<!-- ```{r}
 install.packages("here")
 install.packages("tidyverse")
 install.packages("xtable")
-``` 
+```  -->
 ```{r}
 library(tidyverse)
 library(xtable)
@@ -161,8 +161,9 @@ head(ip_ind)
 
 ```{r}
 # quinto modelo (Modelo de Interacción)
-# hs_gpa + sat_v + sat_m + sex_factor + interacción (sat_m con sex_factor)
-modelo_inter <- lm(fy_gpa ~ hs_gpa * sex_factor + sat_v + sat_m, data = satgpa_train)
+# sat_v + sat_m + sex_factor + interacción (hs_gpa con sex_factor)
+modelo_inter <- lm(fy_gpa ~ hs_gpa * sex_factor + sat_v + sat_m + sex_factor, data = satgpa_train)
+
 
 
 # ajuste
@@ -286,4 +287,121 @@ print(paste("Cantidad de observaciones influyentes por Cook:", length(influyente
 # 3. ¿Están los estudiantes con fy_gpa == 0 dentro de los influyentes?
 estudiantes_cero <- which(satgpa_train$fy_gpa == 0)
 intersect(influyentes_cook, estudiantes_cero)
+```
+# Tests F parciales (modelos anidados)
+
+
+# M1 → M2: sat_sum
+anova(modelo_hs_gpa, modelo_hs_sats)
+
+# M1 → M3: sat_v + sat_m 
+anova(modelo_hs_gpa, modelo_hs_sats_v_m)
+
+# M3 → M4:  sex_factor
+anova(modelo_hs_sats_v_m, modelo_full)
+
+# M4 → M5: interacción hs_gpa*sex_factor
+anova(modelo_full, modelo_inter)
+```
+
+```{r}
+
+# R² ajustado (entrenamiento) + R² predictivo (test)
+
+
+r2_adj_test <- function(modelo, newdata, y_real) {
+  pred <- predict(modelo, newdata = newdata)
+  sse  <- sum((y_real - pred)^2)
+  sst  <- sum((y_real - mean(y_real))^2)
+  list(
+    R2_aj   = summary(modelo)$adj.r.squared,
+    R2_pred = 1 - sse/sst,
+    p       = length(coef(modelo)) - 1
+  )
+}
+
+modelos_lista <- list(
+  M1_hs_gpa      = modelo_hs_gpa,
+  M2_hs_sats     = modelo_hs_sats,
+  M3_hs_sats_v_m = modelo_hs_sats_v_m,
+  M4_full        = modelo_full,
+  M5_inter       = modelo_inter
+)
+
+comparacion_df <- map_dfr(modelos_lista, r2_adj_test,
+                          newdata = satgpa_test,
+                          y_real  = satgpa_test$fy_gpa,
+                          .id = "modelo") |>
+  mutate(modelo = factor(modelo, levels = names(modelos_lista)))
+
+comparacion_df
+```
+
+```{r}
+
+# Stepwise 
+
+modelo_step <- step(modelo_inter, direction = "both", trace = 1)
+summary(modelo_step)
+```
+
+```{r}
+
+# Gráficos comparativos R^2 (train vs test)
+
+
+# --- Gráfico 1: R² ajustado vs R² predictivo ---
+comparacion_df |>
+  pivot_longer(c(R2_aj, R2_pred), names_to = "metrica", values_to = "valor") |>
+  mutate(metrica = recode(metrica,
+                          R2_aj   = "R² ajustado (train)",
+                          R2_pred = "R² predictivo (test)")) |>
+  ggplot(aes(x = modelo, y = valor, color = metrica, group = metrica)) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 3) +
+  geom_text(aes(label = round(valor, 3)), vjust = -0.6, size = 2.8, show.legend = FALSE) +
+  labs(title = "R² ajustado vs R² predictivo por modelo",
+       x = NULL, y = "R²", color = NULL) +
+  ylim(0, 1) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 35, hjust = 1))
+
+# --- Gráfico 2: RMSE por modelo ---
+metricas_test_rmse <- function(modelo, newdata, y_real) {
+  pred <- predict(modelo, newdata = newdata)
+  data.frame(RMSE = sqrt(mean((y_real - pred)^2)),
+             MAE  = mean(abs(y_real - pred)))
+}
+
+map_dfr(modelos_lista, metricas_test_rmse,
+        newdata = satgpa_test,
+        y_real  = satgpa_test$fy_gpa,
+        .id = "modelo") |>
+  mutate(modelo = factor(modelo, levels = names(modelos_lista))) |>
+  pivot_longer(c(RMSE, MAE), names_to = "metrica", values_to = "valor") |>
+  ggplot(aes(x = modelo, y = valor, fill = modelo)) +
+  geom_col(width = 0.6) +
+  facet_wrap(~metrica, scales = "free_y") +
+  labs(title = "Error de predicción por modelo (test)",
+       x = NULL, y = NULL) +
+  theme_minimal() +
+  theme(axis.text.x  = element_text(angle = 35, hjust = 1),
+        legend.position = "none")
+
+# --- Gráfico 3: predicho vs observado (M4 y M5) ---
+bind_rows(
+  data.frame(obs    = satgpa_test$fy_gpa,
+             pred   = predict(modelo_full,  newdata = satgpa_test),
+             modelo = "M4_full"),
+  data.frame(obs    = satgpa_test$fy_gpa,
+             pred   = predict(modelo_inter, newdata = satgpa_test),
+             modelo = "M5_inter")
+) |>
+  ggplot(aes(x = obs, y = pred)) +
+  geom_point(alpha = 0.4) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  facet_wrap(~modelo) +
+  labs(title = "Predicho vs observado — mejores modelos (test)",
+       x = "GPA real", y = "GPA predicho") +
+  theme_minimal()
 ```
