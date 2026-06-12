@@ -67,135 +67,6 @@ head(ip_ind)
 ```
 
 ```{r}
-# segundo modelo
-# hs_gpa + sat_sum
-modelo_hs_sats <- lm(fy_gpa ~ hs_gpa + sat_sum, data = satgpa_train)
-# ajuste
-summary(modelo_hs_sats)
-confint(modelo_hs_sats, level = 0.95)
-# predicción
-pred_test_hs_sats <- predict(modelo_hs_sats, newdata = satgpa_test)
-# métricas de evaluación
-rmse <- sqrt(mean((satgpa_test$fy_gpa - pred_test_hs_sats)^2))
-mae  <- mean(abs(satgpa_test$fy_gpa - pred_test_hs_sats))
-
-sse <- sum((satgpa_test$fy_gpa - pred_test_hs_sats)^2)
-sst <- sum((satgpa_test$fy_gpa - mean(satgpa_test$fy_gpa))^2)
-r2_pred <- 1 - sse/sst
-
-c(RMSE = rmse, MAE = mae, R2_pred = r2_pred)
-
-# intervalo de confianza de la media condicional E[y|x]
-ic_media <- predict(modelo_hs_sats, newdata = satgpa_test,
-                    interval = "confidence", level = 0.95)
-
-# intervalo de predicción para una observación individual
-ip_ind <- predict(modelo_hs_sats, newdata = satgpa_test,
-                  interval = "prediction", level = 0.95)
-
-head(ic_media)
-head(ip_ind)
-```
-
-```{r}
-# tercer modelo
-# hs_gpa + sat_v + sat_m
-modelo_hs_sats_v_m <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m, data = satgpa_train)
-# ajuste
-summary(modelo_hs_sats_v_m)
-confint(modelo_hs_sats_v_m, level = 0.95)
-# predicción
-pred_test_hs_sats_v_m <- predict(modelo_hs_sats_v_m, newdata = satgpa_test)
-# métricas de evaluación
-rmse <- sqrt(mean((satgpa_test$fy_gpa - pred_test_hs_sats_v_m)^2))
-mae  <- mean(abs(satgpa_test$fy_gpa - pred_test_hs_sats_v_m))
-
-sse <- sum((satgpa_test$fy_gpa - pred_test_hs_sats_v_m)^2)
-sst <- sum((satgpa_test$fy_gpa - mean(satgpa_test$fy_gpa))^2)
-r2_pred <- 1 - sse/sst
-
-c(RMSE = rmse, MAE = mae, R2_pred = r2_pred)
-
-# intervalo de confianza de la media condicional E[y|x]
-ic_media <- predict(modelo_hs_sats_v_m, newdata = satgpa_test,
-                    interval = "confidence", level = 0.95)
-
-# intervalo de predicción para una observación individual
-ip_ind <- predict(modelo_hs_sats_v_m, newdata = satgpa_test,
-                  interval = "prediction", level = 0.95)
-
-head(ic_media)
-head(ip_ind)
-```
-
-```{r}
-# cuarto modelo
-# hs_gpa + sat_v + sat_m + sex_factor
-modelo_full <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m + sex_factor, data = satgpa_train)
-# ajuste
-summary(modelo_full)
-confint(modelo_full, level = 0.95)
-# predicción
-pred_test_full <- predict(modelo_full, newdata = satgpa_test)
-# métricas de evaluación
-rmse <- sqrt(mean((satgpa_test$fy_gpa - pred_test_full)^2))
-mae  <- mean(abs(satgpa_test$fy_gpa - pred_test_full))
-
-sse <- sum((satgpa_test$fy_gpa - pred_test_full)^2)
-sst <- sum((satgpa_test$fy_gpa - mean(satgpa_test$fy_gpa))^2)
-r2_pred <- 1 - sse/sst
-
-c(RMSE = rmse, MAE = mae, R2_pred = r2_pred)
-
-# intervalo de confianza de la media condicional E[y|x]
-ic_media <- predict(modelo_full, newdata = satgpa_test,
-                    interval = "confidence", level = 0.95)
-
-# intervalo de predicción para una observación individual
-ip_ind <- predict(modelo_full, newdata = satgpa_test,
-                  interval = "prediction", level = 0.95)
-
-head(ic_media)
-head(ip_ind)
-```
-
-```{r}
-# quinto modelo (Modelo de Interacción)
-# sat_v + sat_m + sex_factor + interacción (hs_gpa con sex_factor)
-modelo_inter <- lm(fy_gpa ~ hs_gpa * sex_factor + sat_v + sat_m + sex_factor, data = satgpa_train)
-
-
-
-# ajuste
-summary(modelo_inter)
-confint(modelo_inter, level = 0.95)
-
-# predicción
-pred_test_inter <- predict(modelo_inter, newdata = satgpa_test)
-
-# métricas de evaluación
-rmse <- sqrt(mean((satgpa_test$fy_gpa - pred_test_inter)^2))
-mae  <- mean(abs(satgpa_test$fy_gpa - pred_test_inter))
-
-sse <- sum((satgpa_test$fy_gpa - pred_test_inter)^2)
-sst <- sum((satgpa_test$fy_gpa - mean(satgpa_test$fy_gpa))^2)
-r2_pred <- 1 - sse/sst
-
-c(RMSE = rmse, MAE = mae, R2_pred = r2_pred)
-
-# intervalo de confianza de la media condicional E[y|x]
-ic_media <- predict(modelo_inter, newdata = satgpa_test,
-                    interval = "confidence", level = 0.95)
-
-# intervalo de predicción para una observación individual
-ip_ind <- predict(modelo_inter, newdata = satgpa_test,
-                  interval = "prediction", level = 0.95)
-
-head(ic_media)
-head(ip_ind)
-```
-
-```{r}
 # 1. Asegúrate de tener cargadas estas librerías para los tests de más adelante
 install.packages("lmtest")
 install.packages("car")
@@ -244,13 +115,15 @@ print(round(tabla_resultados, 5))
 ```
 
 ```{r}
-# ¿Aportan algo las pruebas SAT desglosadas por sobre las notas de la escuela?
+# aporte sat, por separado y en conjunto
 anova(m1, m2) 
 
-# ¿Aporta el género y la interacción por sobre el modelo de puras variables académicas?
-anova(m2, m5)
+anova(m1, m3)
 
-# ¿Es realmente necesaria la interacción de género (M5) o nos quedamos con el aditivo (M4)?
+# aporte género
+anova(m2, m4)
+
+# aporte interacción
 anova(m4, m5)
 ```
 
@@ -288,21 +161,6 @@ print(paste("Cantidad de observaciones influyentes por Cook:", length(influyente
 estudiantes_cero <- which(satgpa_train$fy_gpa == 0)
 intersect(influyentes_cook, estudiantes_cero)
 ```
-# Tests F parciales (modelos anidados)
-
-
-# M1 → M2: sat_sum
-anova(modelo_hs_gpa, modelo_hs_sats)
-
-# M1 → M3: sat_v + sat_m 
-anova(modelo_hs_gpa, modelo_hs_sats_v_m)
-
-# M3 → M4:  sex_factor
-anova(modelo_hs_sats_v_m, modelo_full)
-
-# M4 → M5: interacción hs_gpa*sex_factor
-anova(modelo_full, modelo_inter)
-```
 
 ```{r}
 
@@ -321,11 +179,11 @@ r2_adj_test <- function(modelo, newdata, y_real) {
 }
 
 modelos_lista <- list(
-  M1_hs_gpa      = modelo_hs_gpa,
-  M2_hs_sats     = modelo_hs_sats,
-  M3_hs_sats_v_m = modelo_hs_sats_v_m,
-  M4_full        = modelo_full,
-  M5_inter       = modelo_inter
+  M1_hs_gpa      = m1,
+  M2_hs_sats     = m2,
+  M3_hs_sats_v_m = m3,
+  M4_full        = m4,
+  M5_inter       = m5
 )
 
 comparacion_df <- map_dfr(modelos_lista, r2_adj_test,
@@ -341,7 +199,7 @@ comparacion_df
 
 # Stepwise 
 
-modelo_step <- step(modelo_inter, direction = "both", trace = 1)
+modelo_step <- step(m5, direction = "both", trace = 1)
 summary(modelo_step)
 ```
 
@@ -391,10 +249,10 @@ map_dfr(modelos_lista, metricas_test_rmse,
 # --- Gráfico 3: predicho vs observado (M4 y M5) ---
 bind_rows(
   data.frame(obs    = satgpa_test$fy_gpa,
-             pred   = predict(modelo_full,  newdata = satgpa_test),
+             pred   = predict(m4,  newdata = satgpa_test),
              modelo = "M4_full"),
   data.frame(obs    = satgpa_test$fy_gpa,
-             pred   = predict(modelo_inter, newdata = satgpa_test),
+             pred   = predict(m5, newdata = satgpa_test),
              modelo = "M5_inter")
 ) |>
   ggplot(aes(x = obs, y = pred)) +
