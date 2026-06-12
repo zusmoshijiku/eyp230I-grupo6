@@ -1,11 +1,18 @@
-# Diagnóstico de Modelos de Regresión
-### Grupo 6 - SAT-GPA
+---
+title: "Diagnóstico de Modelos de Regresión"
+subtitle: "Grupo 6 - SAT-GPA"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+---
 
 
 
-
+# Requisitos previos
 <!-- ```{r}
 install.packages(c("lmtest", "car"))
+install.packages(c("nortest"))
 ```  -->
 
 ```{r setup, message=FALSE, warning=FALSE}
@@ -17,29 +24,18 @@ library(here)
 library(lmtest)   # bptest
 library(car)      # vif
 
-satgpa <- read_csv(here("data", "satgpa_clean.csv"))
 
-set.seed(2307)
-train_indices        <- sample(1:nrow(satgpa), size = 0.8 * nrow(satgpa))
-satgpa_train         <- satgpa[train_indices, ]
-satgpa_test          <- satgpa[-train_indices, ]
-satgpa_train$sex_factor <- as.factor(satgpa_train$sex_factor)
-satgpa_test$sex_factor  <- factor(satgpa_test$sex_factor,
-                                  levels = levels(satgpa_train$sex_factor))
 ```
 
 ```{r modelos}
-# modelo_hs_gpa      <- lm(fy_gpa ~ hs_gpa,                             data = satgpa_train)
-# modelo_hs_sats     <- lm(fy_gpa ~ hs_gpa + sat_sum,                   data = satgpa_train)
-# modelo_hs_sats_v_m <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m,             data = satgpa_train)
+
 satgpa_train_clean <- readRDS("satgpa_limpio.rds")
-modelo_full        <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m + sex_factor, data = satgpa_train_clean)
-modelo_inter       <- lm(fy_gpa ~ hs_gpa * sex_factor + sat_v + sat_m, data = satgpa_train_clean)
+modelo_full        <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m + sex_factor,
+                      data = satgpa_train_clean)
+modelo_inter       <- lm(fy_gpa ~ hs_gpa * sex_factor + sat_v + sat_m,
+                      data = satgpa_train_clean)
 
 modelos_lista <- list(
-  # M1_hs_gpa      = modelo_hs_gpa,
-  # M2_hs_sats     = modelo_hs_sats,
-  # M3_hs_sats_v_m = modelo_hs_sats_v_m,
   M4_full        = modelo_full,
   M5_inter       = modelo_inter
 )
@@ -47,62 +43,84 @@ modelos_lista <- list(
 
 ## Residuos vs Valores Ajustados
 
-Permite verificar **linealidad** (los residuos deben fluctuar aleatoriamente en torno a cero)
-y dar una primera señal de **homocedasticidad** (la dispersión debe ser constante a lo largo del eje x).
+Primero verificamos la relación entre los residuos y los valores ajustados para ambos modelos. 
+Si los supuestos de linealidad y homocedasticidad se cumplen, los residuos deberían distribuirse aleatoriamente alrededor de cero sin mostrar patrones sistemáticos.
 
-```{r resid_fitted}
-map_dfr(modelos_lista, function(m) {
-  data.frame(ajustado = fitted(m), residuo = residuals(m))
-}, .id = "modelo") |>
-  mutate(modelo = factor(modelo, levels = names(modelos_lista))) |>
-  ggplot(aes(x = ajustado, y = residuo)) +
-  geom_point(alpha = 0.35, size = 1) +
-  geom_hline(yintercept = 0, color = "red", linetype = "dashed") +
-  geom_smooth(method = "loess", se = FALSE, color = "steelblue", linewidth = 0.7) +
-  facet_wrap(~modelo, scales = "free_x") +
-  labs(title = "Residuos vs Valores Ajustados",
-       x = "Valores ajustados", y = "Residuos") +
-  theme_minimal()
+```{r resid_fitted M4}
+par(mfrow = c(1, 1))
+
+
+plot(modelo_full, which = 1, 
+     caption = "Residuos vs Valores Ajustados",
+     sub.caption = "")
+
+
+```
+```{r resid_fitted M5}
+
+par(mfrow = c(1, 1))
+
+
+plot(modelo_inter, which = 1, 
+     caption = "Residuos vs Valores Ajustados",
+     sub.caption = "")
+
+
 ```
 
+El análisis de los gráficos de Residuos vs Valores Ajustados para ambos modelos no muestra patrones evidentes de heterocedasticidad, aunque se observa una ligera asimetría negativa en los residuos, lo que sugiere que podría haber algunos valores atípicos o una distribución de errores no perfectamente normal.
 ## Q-Q Plot — normalidad de errores
 
+Para evaluar la normalidad de los residuos, se generan Q-Q plots para ambos modelos.
 Si los puntos siguen la línea diagonal, los residuos provienen de una distribución normal.
 Desviaciones en las colas indican colas pesadas o asimetría.
 
-```{r qq}
-map_dfr(modelos_lista, function(m) {
-  data.frame(residuo = residuals(m))
-}, .id = "modelo") |>
-  mutate(modelo = factor(modelo, levels = names(modelos_lista))) |>
-  ggplot(aes(sample = residuo)) +
-  stat_qq(alpha = 0.35, size = 1) +
-  stat_qq_line(color = "red", linetype = "dashed") +
-  facet_wrap(~modelo) +
-  labs(title = "Q-Q Plot de residuos",
-       x = "Cuantiles teóricos", y = "Cuantiles muestrales") +
-  theme_minimal()
+# QQ plot para M4
+
+```{r M4 qq}
+plot(modelo_full, which = 2,
+     main = "Q-Q Plot de residuos (M4)",
+     xlab = "Cuantiles teóricos")
 ```
 
-Observamos que ambos modelos presentan asimetrías en las colas, lo que sugiere que los residuos no siguen una distribución normal perfecta.
+# QQ plot para M5
+```{r M5 qq}
+plot(modelo_inter, which = 2,
+     main = "Q-Q Plot de residuos (M5)",
+     xlab = "Cuantiles teóricos")
+```
+
+Observamos que ambos modelos presentan asimetrías negativa, lo que sugiere que los residuos no siguen una distribución normal perfecta.
 Para ello, realizaremos el test de Shapiro-Wilk para evaluar formalmente la normalidad de los residuos.
 
-## Test de Shapiro-Wilk — normalidad
+## Test de Normalidad— normalidad
 
+# Shapiro-Wilk
 H₀: los residuos provienen de una distribución normal.
 Un p-valor < 0.05 rechaza H₀.
 
-```{r shapiro}
-map_dfr(modelos_lista, function(m) {
-  sw <- shapiro.test(residuals(m))
-  data.frame(W = round(sw$statistic, 4), p_valor = round(sw$p.value, 4))
-}, .id = "modelo")
+```{r shapiro M4 M5}
+shapiro.test(residuals(modelo_full))
+shapiro.test(residuals(modelo_inter))
+
+N <- length(rstandard(modelo_full))
+print(N)
 ```
 
+Sin embargo, dado el tamaño de la muestra (N = 1000), es común que incluso pequeñas desviaciones de la normalidad resulten en un p-valor significativo.
+En este caso, aunque el test de Shapiro-Wilk indica que los residuos no son perfectamente normales, es importante considerar también la magnitud de la desviación y su impacto en las inferencias.
 
-En base a los resultados obtenidos, se rechaza H₀ para ambos modelos, lo que indica que los residuos no siguen una distribución normal.
-Confirmando lo observado en los Q-Q plots.
-Ahora procederemos a realizar la transformación de Box-Cox para intentar normalizar los residuos y mejorar el ajuste de los modelos.
+Veamos ahora Liliefors para confirmar esta conclusión.
+```{r lilliefors M4 M5}
+library(nortest)
+lillie.test(residuals(modelo_full))
+lillie.test(residuals(modelo_inter))
+```
+A partir de los resultados del test de Liliefors, se confirma que los residuos de ambos modelos no siguen una distribución normal, lo que refuerza la conclusión obtenida con el test de Shapiro-Wilk.
+Sin embargo, la distancia máxima observada en el test de Liliefors es relativamente pequeña (menor a 5% de la muestra), lo que sugiere que aunque los residuos no son perfectamente normales, la desviación no es extremadamente grande.
+
+
+De todas formas, se procede a realizar la transformación de Box-Cox para normalizar los residuos y mejorar el ajuste de los modelos.
 
 
 ```{r boxCox}
@@ -125,102 +143,113 @@ modelo_boxcox <- lm(fy_gpa_trans ~ hs_gpa * sex_factor + sat_v + sat_m, data = s
 plot(modelo_boxcox, which = 2)
 ```
 ```{r boxCoxVerify}
-# sw_boxcox <- shapiro.test(residuals(modelo_boxcox))
+
 summary(modelo_boxcox)
 ```
+# RESIDUOS VS AJUSTADOS Transformación BoxCox (M5) 
+```{r BoxCox_resid_fitted}
+par(mfrow = c(1, 1))
+
+
+plot(modelo_boxcox, which = 1,
+     caption = "Residuos vs Valores Ajustados",
+     sub.caption = "")
+```
+
+# Q-Q PLOT Transformación BoxCox (M5)
+```{r M6 QQ BoxCox}
+plot(modelo_boxcox, which = 2,
+     main = "Q-Q Plot de residuos (M6_boxcox)",
+     xlab = "Cuantiles teóricos")
+```
+
+```{r Normalidad BoxCox}
+shapiro.test(residuals(modelo_boxcox))
+lillie.test(residuals(modelo_boxcox))
+```
+
+Para el modelo transformado con Box-Cox, se apoya H₀ de normalidad de los residuos (en ambos tests), lo que indica que la transformación ha mejorado significativamente la normalidad de los residuos en comparación con los modelos originales.
+
+Sin embargo, es importante tener en cuenta que la transformación de Box-Cox también puede afectar la interpretación de los coeficientes del modelo, por lo que se debe considerar cuidadosamente si esta transformación es apropiada para el análisis y las conclusiones que se desean obtener.
+En esta misma línea, se recomienda revisar los coeficientes del modelo transformado y compararlos con los modelos originales para entender cómo la transformación ha afectado las relaciones entre las variables.
+Por esta razón, se mantenrán ambos modelos (con y sin transformación) para la evaluación de otros supuestos, como homocedasticidad e influencias.
+
 
 ## Test de Breusch-Pagan — homocedasticidad
 
 H₀: la varianza del error es constante (homocedasticidad).
 Un p-valor < 0.05 evidencia heterocedasticidad.
 
-<!-- ```{r breusch_pagan}
-map_dfr(modelos_lista, function(m) {
-  bp <- bptest(m)
-  data.frame(BP = round(bp$statistic, 4), p_valor = round(bp$p.value, 4))
-}, .id = "modelo")
-``` -->
+```{r BP M4 M5 BoxCox}
+bptest(modelo_full)
+bptest(modelo_inter)
+bptest(modelo_boxcox)
+```
+
+Para todos los modelos, no se rechaza H₀, lo que sugiere que no hay evidencia de heterocedasticidad en los residuos.
+Recordemos los gráficos de Residuos vs Ajustados, donde se observaban patrones que no sugerían heterocedasticidad, lo que es consistente con los resultados del test de Breusch-Pagan.
+
+## No Autocorrelación de errores
+Para evaluar la autocorrelación de los residuos, se puede utilizar el test de Durbin-Watson.
+H₀: no hay autocorrelación de los residuos.
+Un valor cercano a 2 indica ausencia de autocorrelación; valores < 2 sugieren autocorrelación positiva, y valores > 2 sugieren autocorrelación negativa.  
+```{r durbin-watson M4 M5 BoxCox}
+dwtest(modelo_full)
+dwtest(modelo_inter)
+dwtest(modelo_boxcox)
+```
+
+En base a los resultados del test de Durbin-Watson, se observa que para los modelos M4, M5 y M6 (BoxCox) no se rechaza H₀, lo que sugiere que no hay evidencia de autocorrelación de los residuos.
 
 ## Factor de Inflación de la Varianza (VIF) — multicolinealidad
 
 VIF > 10 indica colinealidad grave; VIF > 5 es señal de advertencia.
-M1 tiene un solo predictor, por lo que no aplica.
+```{r vif M4 M5 M6}
+vif(modelo_full)
+vif(modelo_inter)
+vif(modelo_boxcox)
+```
+En general no hay evidencia de multicolinealidad grave en ninguno de los modelos, aunque se observa que la variable hs_gpa:sex_factor (interacción)
+posee un VIF elevado, lo cual es esperado dado que es una interacción entre hs_gpa y sex_factor, que también están presentes en el modelo (produciendo así una multicolinealidad estructural).
+Para evaluar la multicolinealidad de manera más específica en los predictores, se puede calcular el VIF utilizando el tipo "predictor", lo que permite identificar si algún predictor específico está causando colinealidad.
 
-<!-- ```{r vif}
-map(modelos_lista[-1], vif)
-``` -->
+
+```{r vif M5 M6}
+vif(modelo_inter, type = "predictor")
+vif(modelo_boxcox, type = "predictor")
+```
+En ambos modelos, se observa que no se presentan problemas graves de multicolinealidad entre los predictores, ya que todos los VIFs están por debajo del umbral de 5 (menor a 2 en particular).
 
 ## Leverage y Distancia de Cook — observaciones influyentes
 
-Se aplica sobre M4 y M5 (modelos candidatos finales).
+```{r DistanciaCook M4 M5 M6}
+plot(modelo_full, which = 4, main = "Distancia de Cook: Modelo Full")
 
-Umbrales utilizados:
-- Leverage: $h_{ii} > 2(p+1)/n$
-- Cook: $D_i > 4/n$
+plot(modelo_inter, which = 4, main = "Distancia de Cook: Modelo con Interacción")
 
-<!-- ```{r influyentes}
-diag_df <- function(modelo, nombre) {
-  n   <- nrow(modelo$model)
-  p   <- length(coef(modelo)) - 1
-  thr_h <- 2 * (p + 1) / n
-  thr_D <- 4 / n
+plot(modelo_boxcox, which = 4, main = "Distancia de Cook: Modelo con Transformación de Box-Cox")
+```
 
-  data.frame(
-    obs      = seq_len(n),
-    leverage = hatvalues(modelo),
-    cooks_d  = cooks.distance(modelo),
-    modelo   = nombre,
-    thr_h    = thr_h,
-    thr_D    = thr_D
-  )
-}
 
-infl <- bind_rows(
-  diag_df(modelo_full,  "M4_full"),
-  diag_df(modelo_inter, "M5_inter")
-) |>
-  mutate(
-    alto_lev = leverage > thr_h,
-    alto_Di  = cooks_d  > thr_D
-  )
+```{r Influyentes H M4 M5 M6}
+plot(modelo_full, which = 5)
+plot(modelo_inter, which = 5)
+plot(modelo_boxcox, which = 5)
+```
+Se procederá a revisar aquellas observaciones influyentes destacadas por los gráficos.
 
-# Resumen de observaciones que superan el umbral
-infl |>
-  group_by(modelo) |>
-  summarise(n_alto_leverage = sum(alto_lev),
-            n_alto_cooks    = sum(alto_Di))
-``` -->
 
-<!-- ```{r plot_leverage}
-umbrales_h <- infl |> distinct(modelo, thr_h)
+```{r Influyentes M4 M5 M6}
+satgpa_train_clean[c(111, 182, 419, 492, 669), ]
+```
+Análisis Clínico de Observaciones Influyentes
+Tras analizar visualmente la Distancia de Cook en los modelos candidatos, se procedió a inspeccionar las observaciones más extremas señaladas por el gráfico (filas 111, 182, 419, 492 y 669).
+Se constató que estos casos corresponden a comportamientos atípicos pero legítimos dentro de la población estudiantil. 
+Por ejemplo:
+ - La observación 111 muestra un estudiante con antecedentes discretos (HS GPA = 2.0) que logró un desempeño universitario sobresaliente (FY GPA = 3.33).
+ - La observación 182 representa el escenario opuesto: un rendimiento escolar perfecto (HS GPA = 4.0) que colapsó en el primer año de universidad (FY GPA = 1.12).
 
-infl |>
-  ggplot(aes(x = obs, y = leverage, color = alto_lev)) +
-  geom_point(size = 1.5, alpha = 0.7) +
-  geom_hline(data = umbrales_h,
-             aes(yintercept = thr_h),
-             linetype = "dashed", color = "red") +
-  facet_wrap(~modelo) +
-  scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "tomato")) +
-  labs(title = "Leverage por observación",
-       x = "Observación", y = expression(h[ii]),
-       color = "Alto leverage") +
-  theme_minimal()
-``` -->
+Estadísticamente, mantener estos casos reales es fundamental para no sobreajustar artificialmente el modelo. Dado que contamos con una muestra masiva de $N = 996$,
+el peso de estos 5 alumnos no altera de forma significativa las pendientes generales del modelo aditivo (modelo_full) ni del modelo con interacción (modelo_inter),
+garantizando que las conclusiones e interpretaciones sigan siendo robustas y aplicables a la realidad institucional.
 
-<!-- ```{r plot_cooks}
-umbrales_D <- infl |> distinct(modelo, thr_D)
-
-infl |>
-  ggplot(aes(x = obs, y = cooks_d, color = alto_Di)) +
-  geom_point(size = 1.5, alpha = 0.7) +
-  geom_hline(data = umbrales_D,
-             aes(yintercept = thr_D),
-             linetype = "dashed", color = "red") +
-  facet_wrap(~modelo) +
-  scale_color_manual(values = c("FALSE" = "grey60", "TRUE" = "tomato")) +
-  labs(title = "Distancia de Cook por observación",
-       x = "Observación", y = expression(D[i]),
-       color = "Influyente") +
-  theme_minimal()
-``` -->

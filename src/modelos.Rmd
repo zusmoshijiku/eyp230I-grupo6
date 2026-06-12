@@ -179,7 +179,7 @@ modelo_step <- step(m5, direction = "both", trace = 1)
 summary(modelo_step)
 ```
 
-```{r}
+<!-- ```{r}
 
 # Gráficos comparativos R^2 (train vs test)
 
