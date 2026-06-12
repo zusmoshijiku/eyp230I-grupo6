@@ -33,63 +33,36 @@ satgpa_test$sex_factor  <- factor(satgpa_test$sex_factor,
 ```
 
 ```{r}
-# primer modelo
-# solo hs_gpa, con intercepto
-modelo_hs_gpa <- lm(fy_gpa ~ hs_gpa, data = satgpa_train)
 
-# ajuste
-summary(modelo_hs_gpa)
-confint(modelo_hs_gpa, level = 0.95)
-
-# predicción
-pred_test <- predict(modelo_hs_gpa, newdata = satgpa_test)
-
-# métricas de evaluación
-rmse <- sqrt(mean((satgpa_test$fy_gpa - pred_test)^2))
-mae  <- mean(abs(satgpa_test$fy_gpa - pred_test))
-
-sse <- sum((satgpa_test$fy_gpa - pred_test)^2)
-sst <- sum((satgpa_test$fy_gpa - mean(satgpa_test$fy_gpa))^2)
-r2_pred <- 1 - sse/sst
-
-c(RMSE = rmse, MAE = mae, R2_pred = r2_pred)
-
-# intervalo de confianza de la media condicional E[y|x]
-ic_media <- predict(modelo_hs_gpa, newdata = satgpa_test,
-                    interval = "confidence", level = 0.95)
-
-# intervalo de predicción para una observación individual
-ip_ind <- predict(modelo_hs_gpa, newdata = satgpa_test,
-                  interval = "prediction", level = 0.95)
-
-head(ic_media)
-head(ip_ind)
-```
-
-```{r}
-# 1. Asegúrate de tener cargadas estas librerías para los tests de más adelante
-install.packages("lmtest")
-install.packages("car")
+# install.packages("lmtest")
+# install.packages("car")
 library(lmtest)
 library(car)
 
-# 2. Ajustar los 5 modelos teóricos en el conjunto de ENTRAMIENTO
+# ajustar los modelos
 m1 <- lm(fy_gpa ~ hs_gpa, data = satgpa_train)
 m2 <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m, data = satgpa_train)
 m3 <- lm(fy_gpa ~ hs_gpa + sat_sum, data = satgpa_train)
 m4 <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m + sex_factor, data = satgpa_train)
 m5 <- lm(fy_gpa ~ sat_v + sat_m + hs_gpa * sex_factor, data = satgpa_train) 
-# Nota: hs_gpa * sex_factor incluye hs_gpa, sex_factor y la interacción automáticamente.
 
-# 3. Función mágica para calcular métricas In-Sample y Out-of-Sample de una sola vez
+n_train <- nrow(satgpa_train)
+
+sigma2_full <- deviance(m5) / df.residual(m5) 
+
 calcular_metricas_globales <- function(modelo, datos_test) {
-  # Métricas In-Sample (Entrenamiento)
+  # in-sample
   s <- summary(modelo)
   r2 <- s$r.squared
   r2_adj <- s$adj.r.squared
   rse <- s$sigma
   
-  # Métricas Out-of-Sample (Prueba)
+  # mallows
+  rss_p <- deviance(modelo)
+  p_param <- length(coef(modelo)) # Número de parámetros incluyendo intercepto
+  cp_mallows <- (rss_p / sigma2_full) + 2 * p_param - n_train
+  
+  # out-of-sample
   pred <- predict(modelo, newdata = datos_test)
   rmse <- sqrt(mean((datos_test$fy_gpa - pred)^2))
   mae  <- mean(abs(datos_test$fy_gpa - pred))
@@ -97,11 +70,11 @@ calcular_metricas_globales <- function(modelo, datos_test) {
   sst  <- sum((datos_test$fy_gpa - mean(datos_test$fy_gpa))^2)
   r2_pred <- 1 - (sse / sst)
   
-  return(c(RSE_in = rse, R2_in = r2, R2Adj_in = r2_adj, 
+  return(c(RSE_in = rse, R2_in = r2, R2Adj_in = r2_adj, Cp_Mallows = cp_mallows,
            RMSE_test = rmse, MAE_test = mae, R2_pred = r2_pred))
 }
 
-# 4. Crear la tabla comparativa final
+# 3. Reconstruir la tabla comparativa final
 tabla_resultados <- rbind(
   Modelo_1 = calcular_metricas_globales(m1, satgpa_test),
   Modelo_2 = calcular_metricas_globales(m2, satgpa_test),
@@ -110,7 +83,7 @@ tabla_resultados <- rbind(
   Modelo_5 = calcular_metricas_globales(m5, satgpa_test)
 )
 
-# Mira los números en tu consola
+# 4. Imprimir la tabla con los números exactos calculados matemáticamente
 print(round(tabla_resultados, 5))
 ```
 
@@ -120,11 +93,14 @@ anova(m1, m2)
 
 anova(m1, m3)
 
+AIC(m2, m3); BIC(m2, m3)
+
 # aporte género
 anova(m2, m4)
 
 # aporte interacción
 anova(m4, m5)
+
 ```
 
 ```{r}
@@ -262,4 +238,43 @@ bind_rows(
   labs(title = "Predicho vs observado — mejores modelos (test)",
        x = "GPA real", y = "GPA predicho") +
   theme_minimal()
+```
+
+```{r}
+evaluar_rendimiento <- function(modelo, datos_test, variable_y = "fy_gpa") {
+  
+  # 1. Extraer los valores reales de la variable respuesta
+  y_real <- datos_test[[variable_y]]
+  
+  # 2. Generar predicciones puntuales e intervalos
+  ip_ind <- predict(modelo, newdata = datos_test, interval = "prediction", level = 0.95)
+  pred_test <- ip_ind[, "fit"]
+  límite_inf <- ip_ind[, "lwr"]
+  límite_sup <- ip_ind[, "upr"]
+  
+  # 3. Calcular métricas clásicas de error
+  rmse <- sqrt(mean((y_real - pred_test)^2))
+  mae  <- mean(abs(y_real - pred_test))
+  
+  sse <- sum((y_real - pred_test)^2)
+  sst <- sum((y_real - mean(y_real))^2)
+  r2_pred <- 1 - (sse / sst)
+  
+  # 4. Calcular métricas de los intervalos
+  adentro <- (y_real >= límite_inf) & (y_real <= límite_sup)
+  cobertura_empirica <- mean(adentro) * 100
+  amplitud_media <- mean(límite_sup - límite_inf)
+  
+  # 5. Retornar un dataframe resumen con los resultados redondeados
+  resultados <- data.frame(
+    Modelo = deparse(substitute(modelo)),
+    RMSE = round(rmse, 4),
+    MAE = round(mae, 4),
+    R2_Pred = round(r2_pred, 4),
+    Cobertura_Pct = round(cobertura_empirica, 2),
+    Amplitud_Media = round(amplitud_media, 4)
+  )
+  
+  return(resultados)
+}
 ```
