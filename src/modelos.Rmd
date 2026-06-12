@@ -195,10 +195,12 @@ head(ic_media)
 head(ip_ind)
 ```
 
+
+<!-- install.packages("lmtest")
+install.packages("car") -->
+
 ```{r}
-# 1. Asegúrate de tener cargadas estas librerías para los tests de más adelante
-install.packages("lmtest")
-install.packages("car")
+
 library(lmtest)
 library(car)
 
@@ -289,7 +291,7 @@ estudiantes_cero <- which(satgpa_train$fy_gpa == 0)
 intersect(influyentes_cook, estudiantes_cero)
 ```
 # Tests F parciales (modelos anidados)
-
+```{r}
 
 # M1 → M2: sat_sum
 anova(modelo_hs_gpa, modelo_hs_sats)
@@ -345,7 +347,7 @@ modelo_step <- step(modelo_inter, direction = "both", trace = 1)
 summary(modelo_step)
 ```
 
-```{r}
+<!-- ```{r}
 
 # Gráficos comparativos R^2 (train vs test)
 
@@ -404,4 +406,4 @@ bind_rows(
   labs(title = "Predicho vs observado — mejores modelos (test)",
        x = "GPA real", y = "GPA predicho") +
   theme_minimal()
-```
+``` -->
