@@ -1,0 +1,161 @@
+# Proyecto Análisis de Regresión
+### Grupo 6 - SAT-GPA
+
+<!-- ```{r}
+install.packages("here")
+install.packages("tidyverse")
+install.packages("xtable")
+```  -->
+```{r}
+library(tidyverse)
+library(xtable)
+# Cargar datos
+library(here)
+satgpa <- read_csv(here("data", "satgpa_clean.csv"))
+```
+
+```{r}
+# train test split
+set.seed(2307)
+satgpa$.row <- seq_len(nrow(satgpa))
+train_rows <- satgpa %>%
+    group_by(sex_factor) %>%
+    sample_frac(0.8) %>%
+    ungroup() %>%
+    pull(.row)
+
+satgpa_train <- satgpa[train_rows, ] %>% dplyr::select(-.row)
+satgpa_test  <- satgpa[-train_rows, ] %>% dplyr::select(-.row)
+
+satgpa_train$sex_factor <- as.factor(satgpa_train$sex_factor)
+satgpa_test$sex_factor  <- factor(satgpa_test$sex_factor,
+                                  levels = levels(satgpa_train$sex_factor))
+```
+
+```{r}
+# Modelos
+
+# install.packages("lmtest")
+# install.packages("car")
+library(lmtest)
+library(car)
+
+# ajustar los modelos
+m1 <- lm(fy_gpa ~ hs_gpa, data = satgpa_train)
+m2 <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m, data = satgpa_train)
+m3 <- lm(fy_gpa ~ hs_gpa + sat_sum, data = satgpa_train)
+m4 <- lm(fy_gpa ~ hs_gpa + sat_v + sat_m + sex_factor, data = satgpa_train)
+m5 <- lm(fy_gpa ~ sat_v + sat_m + hs_gpa * sex_factor, data = satgpa_train)
+
+n_train <- nrow(satgpa_train)
+sigma2_full <- deviance(m5) / df.residual(m5)
+
+calcular_metricas_globales <- function(modelo, datos_test) {
+  # in-sample
+  s <- summary(modelo)
+  r2 <- s$r.squared
+  r2_adj <- s$adj.r.squared
+  rse <- s$sigma
+
+  # mallows
+  rss_p <- deviance(modelo)
+  p_param <- length(coef(modelo)) # Número de parámetros incluyendo intercepto
+  cp_mallows <- (rss_p / sigma2_full) + 2 * p_param - n_train
+
+  # out-of-sample
+  pred <- predict(modelo, newdata = datos_test)
+  rmse <- sqrt(mean((datos_test$fy_gpa - pred)^2))
+  mae  <- mean(abs(datos_test$fy_gpa - pred))
+  sse  <- sum((datos_test$fy_gpa - pred)^2)
+  sst  <- sum((datos_test$fy_gpa - mean(datos_test$fy_gpa))^2)
+  r2_pred <- 1 - (sse / sst)
+  
+  return(c(RSE_in = rse, R2_in = r2, R2Adj_in = r2_adj, Cp_Mallows = cp_mallows,
+           RMSE_test = rmse, MAE_test = mae, R2_pred = r2_pred))}
+
+```
+
+```{r}
+## Selección del modelo
+# Comparar modelos: R^2 ajustado, Cp Mallows, etc (métricas globales)
+# RMSE, MAE, R^2 ajustado en train y test
+tabla_resultados <- rbind(
+  Modelo_1 = calcular_metricas_globales(m1, satgpa_test),
+  Modelo_2 = calcular_metricas_globales(m2, satgpa_test),
+  Modelo_3 = calcular_metricas_globales(m3, satgpa_test),
+  Modelo_4 = calcular_metricas_globales(m4, satgpa_test),
+  Modelo_5 = calcular_metricas_globales(m5, satgpa_test)
+)
+print(round(tabla_resultados, 5))
+
+# Comprarar modelos en base a las métricas anteriores:
+# Para training: RSE es menor en M5, R^2 y R^2 ajustado es mejor para M5, Cp de Mallows aprox p (o más cercano) en M5
+# Para testing: RMSE es menor en M5, MAE en M5 no es el más bajo, R^2 prediccho es mayor para M5
+
+
+# Selección de variables con justificación
+# Stepwise 
+modelo_step <- step(m5, direction = "both", trace = 1)
+summary(modelo_step)
+
+# Comparación agregar variables
+anova(m1, m2) #agregar sat separado
+anova(m1, m3) #agregar sat sum
+anova(m2, m4) #agregar sex
+anova(m4, m5) #interaccion
+```
+
+
+```{r}
+## Validación del modelo (arriba están las métricas globales)
+
+# Revisar que no haya overfitting (revisar restaa)
+tabla_resultados$diferencia_RMSE <- tabla_resultados$RMSE_test - tabla_resultados$RSE_in
+tabla_resultados$diferencia_R2   <- tabla_resultados$R2_in - tabla_resultados$R2_pred
+print(round(tabla_resultados[, c("RSE_in", "RMSE_test", "diferencia_RMSE", "R2_in", "R2_pred", "diferencia_R2")], 5))
+
+
+pred_train <- predict(m5, satgpa_train)
+pred_test  <- predict(m5, satgpa_test)
+par(mfrow = c(1,2))
+plot(satgpa_train$fy_gpa, pred_train,
+     main = "Train", xlab = "Real", ylab = "Predicho",
+     pch = 19, col = "blue")
+
+plot(satgpa_test$fy_gpa, pred_test,
+     main = "Test", xlab = "Real", ylab = "Predicho",
+     pch = 19, col = "orange")
+```
+
+```{r}
+# Verificar que los supuestos del modelo se cumplan en testing
+# Residuos
+residuos_test <- satgpa_test$fy_gpa - pred_test
+par(mfrow = c(1, 2))
+
+# Residuos vs ajustados
+plot(pred_test, residuos_test,
+     main = "Residuos vs ajustados (Test)",
+     xlab = "Valores predichos", ylab = "Residuos",
+     pch = 19, col = "darkgreen")
+abline(h = 0, col = "#041f04", lwd = 2, lty = 2)
+
+# QQ-plot de residuos
+qqnorm(residuos_test, main = "QQ-Plot (Test)",
+       pch = 19, col = "#971a1a")
+qqline(residuos_test, col = "darkred", lwd = 2)
+
+# Corroborar normalidad de residuos
+library(nortest)
+lillie.test(residuos_test)
+
+# Corroborar homocedasticidaad
+plot(pred_test, sqrt(abs(residuos_test)), main = "Scale-Location (Test)",
+     pch = 19, col = "orange")
+```
+
+
+```{r}
+#Reportar intervalos de confianza (para la media) e intervalos de predicción (para test)
+#Cuantificar y discutir la incertidumbre
+```
